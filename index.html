@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1565c0">
+<title>Inventario</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f3f6fb;color:#1c2733}
+  header{background:#1565c0;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:600}
+  main{max-width:520px;margin:0 auto;padding:12px}
+  form,.item{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  label{display:block;font-size:13px;margin:8px 0 3px;color:#4a5b6c}
+  input{width:100%;padding:10px;border:1px solid #c5d0dc;border-radius:8px;font-size:16px}
+  .fila{display:flex;gap:8px}.fila>div{flex:1}
+  button{border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;color:#fff;background:#1565c0}
+  button.sec{background:#78909c}button.rojo{background:#c62828}button.verde{background:#2e7d32}
+  .botones{display:flex;gap:8px;margin-top:12px}.botones button{flex:1}
+  .item h3{margin:0 0 4px;font-size:17px}
+  .item p{margin:2px 0;font-size:14px;color:#4a5b6c}
+  .acciones{display:flex;gap:8px;margin-top:10px}.acciones button{flex:1;padding:8px}
+  .vacio{text-align:center;color:#78909c;padding:20px}
+  #msg{text-align:center;padding:8px;font-size:14px;min-height:20px;color:#2e7d32}
+  #msg.error{color:#c62828}
+  #total{text-align:center;font-weight:600;margin:6px 0 12px}
+  #instalar{display:none;margin:0 auto 12px}
+</style>
+</head>
+<body>
+<header>📦 Inventario de Productos</header>
+<main>
+  <button id="instalar" class="verde">📲 Instalar app</button>
+
+  <form id="form">
+    <strong id="titulo">Nuevo producto</strong>
+    <input type="hidden" id="id">
+    <label for="nombre">Nombre</label>
+    <input id="nombre" required placeholder="Ej: Cuaderno">
+    <label for="categoria">Categoría</label>
+    <input id="categoria" placeholder="Ej: Papelería">
+    <div class="fila">
+      <div><label for="cantidad">Cantidad</label><input id="cantidad" type="number" min="0" required></div>
+      <div><label for="precio">Precio</label><input id="precio" type="number" min="0" step="0.01" required></div>
+    </div>
+    <div class="botones">
+      <button type="submit" id="guardar">Guardar</button>
+      <button type="button" class="sec" id="cancelar" style="display:none">Cancelar</button>
+    </div>
+  </form>
+
+  <div id="msg"></div>
+  <div id="total"></div>
+  <div id="lista"></div>
+</main>
+
+<script>
+const API = '/api/productos';          // misma dirección donde está publicada la app
+const $ = id => document.getElementById(id);
+
+function mensaje(texto, error) {
+  $('msg').textContent = texto;
+  $('msg').className = error ? 'error' : '';
+  setTimeout(() => $('msg').textContent = '', 3000);
+}
+
+// GET: cargar la lista desde la API
+async function cargar() {
+  try {
+    const r = await fetch(API);
+    const productos = await r.json();
+    const lista = $('lista');
+    lista.innerHTML = '';
+    if (!productos.length) lista.innerHTML = '<div class="vacio">No hay productos todavía</div>';
+    let total = 0;
+    productos.forEach(p => {
+      total += p.cantidad * p.precio;
+      const div = document.createElement('div');
+      div.className = 'item';
+      div.innerHTML = `<h3></h3><p class="cat"></p>
+        <p>Cantidad: <b>${p.cantidad}</b> · Precio: <b>$${p.precio.toLocaleString('es-CO')}</b></p>
+        <div class="acciones"><button class="verde">Editar</button><button class="rojo">Eliminar</button></div>`;
+      div.querySelector('h3').textContent = p.nombre;
+      div.querySelector('.cat').textContent = p.categoria ? 'Categoría: ' + p.categoria : '';
+      const [bEditar, bBorrar] = div.querySelectorAll('button');
+      bEditar.onclick = () => editar(p);
+      bBorrar.onclick = () => eliminar(p);
+      lista.appendChild(div);
+    });
+    $('total').textContent = productos.length ? 'Valor total del inventario: $' + total.toLocaleString('es-CO') : '';
+  } catch {
+    mensaje('No se pudo conectar con la API', true);
+  }
+}
+
+// POST (nuevo) o PUT (editar)
+$('form').onsubmit = async e => {
+  e.preventDefault();
+  const id = $('id').value;
+  const datos = {
+    nombre: $('nombre').value,
+    categoria: $('categoria').value,
+    cantidad: $('cantidad').value,
+    precio: $('precio').value
+  };
+  const r = await fetch(id ? `${API}/${id}` : API, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos)
+  });
+  const resp = await r.json();
+  if (!r.ok) return mensaje(resp.error, true);
+  mensaje(id ? 'Producto actualizado ✔' : 'Producto creado ✔');
+  limpiar();
+  cargar();
+};
+
+function editar(p) {
+  $('id').value = p.id;
+  $('nombre').value = p.nombre;
+  $('categoria').value = p.categoria;
+  $('cantidad').value = p.cantidad;
+  $('precio').value = p.precio;
+  $('titulo').textContent = 'Editar producto #' + p.id;
+  $('cancelar').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// DELETE
+async function eliminar(p) {
+  if (!confirm(`¿Eliminar "${p.nombre}"?`)) return;
+  const r = await fetch(`${API}/${p.id}`, { method: 'DELETE' });
+  if (!r.ok) return mensaje('No se pudo eliminar', true);
+  mensaje('Producto eliminado ✔');
+  cargar();
+}
+
+function limpiar() {
+  $('form').reset();
+  $('id').value = '';
+  $('titulo').textContent = 'Nuevo producto';
+  $('cancelar').style.display = 'none';
+}
+$('cancelar').onclick = limpiar;
+
+// ---- PWA: instalar en el celular ----
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+let eventoInstalar;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  eventoInstalar = e;
+  $('instalar').style.display = 'block';
+});
+$('instalar').onclick = async () => {
+  eventoInstalar.prompt();
+  await eventoInstalar.userChoice;
+  $('instalar').style.display = 'none';
+};
+
+cargar();
+</script>
+</body>
+</html>

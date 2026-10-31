@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "nombre": "Arroz",
+    "categoria": "No perecedero",
+    "cantidad": 20,
+    "precio": 4500
+  },
+  {
+    "id": 2,
+    "nombre": "Leche",
+    "categoria": "Perecedero",
+    "cantidad": 10,
+    "precio": 4200
+  }
+]
